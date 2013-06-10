@@ -31,18 +31,32 @@ def constant(type):
 def variable(type):
 	return {
 		"float" : lambda: "gl_FragCoord.x",
+		"vec2" : lambda: "gl_FragCoord.xy",
 		"vec4" : lambda: "gl_FragCoord",
 	}[type]()
 
 def primary_expr(type):
 	return random.choice([constant, variable])(type)
 
+def swizzle(srcsize, dstsize):
+	str = "."
+	for i in range(dstsize):
+		str += random.choice("xyzw"[:srcsize])
+	return str
+
 def function_call(type):
+	btype, size = get_type_and_size(type)
 	return random.choice({
 		"float" : [
 			lambda: "dot(" + expression("vec4") + ", " + expression("vec4") + ")"
+		], "vec2" : [
+			lambda: "vec2(" + expression("float") + ", " + expression("float") + ")",
+			lambda: "texture2D(s, " + expression("vec2") + ")" + swizzle(4, 2),
+			lambda: "texture2D(s, " + expression("vec2") + ", " + expression("float") + ")" + swizzle(4, 2)
 		], "vec4" : [
-			lambda: "vec4(" + expression("float") + ", " + expression("float") + ", " + expression("float") + ", " + expression("float") + ")"
+			lambda: "vec4(" + expression("float") + ", " + expression("float") + ", " + expression("float") + ", " + expression("float") + ")",
+			lambda: "texture2D(s, " + expression("vec2") + ")",
+			lambda: "texture2D(s, " + expression("vec2") + ", " + expression("float") + ")"
 		]
 	}[type])()
 
@@ -79,6 +93,7 @@ if args.seed == None:
 random.seed(args.seed)
 
 print "/* seed: " + str(args.seed) + " */"
+print "uniform sampler2D s;"
 print "void main() {"
 print "\tgl_FragColor = " + expression("vec4") + ";"
 print "}"
