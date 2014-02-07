@@ -617,11 +617,6 @@ static int fragment_alu_disasm(uint32_t *words)
 		scale = instruction_get_bit(inst, offset);
 		pr(", ");
 
-		if (instruction_get_bit(inst, offset + 4)) {
-			pr("unk4 ");
-			assert(0);
-		}
-
 		pr("%s%s", neg ? "-" : "", abs ? "abs(" : "");
 		switch (type) {
 		case 0:
