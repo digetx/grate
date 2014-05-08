@@ -161,3 +161,106 @@ void host1x_stream_dump(struct host1x_stream *stream, FILE *fp)
 		}
 	}
 }
+
+void host1x_stream_interpret(struct host1x_stream *stream)
+{
+	while (stream->ptr < stream->end) {
+		uint32_t opcode = (*stream->ptr >> 28) & 0xf;
+		uint16_t offset, classid, count, mask, value, i;
+
+		switch (opcode) {
+		case HOST1X_OPCODE_SETCL:
+			offset = (*stream->ptr >> 16) & 0xfff;
+			classid = (*stream->ptr >> 6) & 0x3ff;
+			mask = *stream->ptr & 0x3f;
+			stream->ptr++;
+
+			stream->classid = classid;
+
+			for (i = 0; i < 16; i++)
+				if (mask & BIT(i))
+					stream->write_word(stream->user,
+					                   stream->classid,
+					                   offset + i,
+					                   *stream->ptr++);
+
+			break;
+
+		case HOST1X_OPCODE_INCR:
+			offset = (*stream->ptr >> 16) & 0xfff;
+			count = *stream->ptr & 0xffff;
+			stream->ptr++;
+
+			for (i = 0; i < count; i++)
+				stream->write_word(stream->user,
+				                   stream->classid,
+				                   offset + i,
+				                   *stream->ptr++);
+
+			break;
+
+		case HOST1X_OPCODE_NONINCR:
+			offset = (*stream->ptr >> 16) & 0xfff;
+			count = *stream->ptr & 0xffff;
+			stream->ptr++;
+
+			for (i = 0; i < count; i++)
+				stream->write_word(stream->user,
+				                   stream->classid,
+				                   offset,
+				                   *stream->ptr++);
+
+			break;
+
+		case HOST1X_OPCODE_MASK:
+			offset = (*stream->ptr >> 16) & 0xfff;
+			mask = *stream->ptr & 0xffff;
+			stream->ptr++;
+
+			for (i = 0; i < 16; i++)
+				if (mask & BIT(i))
+					stream->write_word(stream->user,
+					                   stream->classid,
+					                   offset + i,
+					                   *stream->ptr++);
+
+			break;
+
+		case HOST1X_OPCODE_IMM:
+			offset = (*stream->ptr >> 16) & 0xfff;
+			value = *stream->ptr & 0xffff;
+			stream->ptr++;
+
+			stream->write_word(stream->user,
+			                   stream->classid,
+			                   offset,
+			                   value);
+
+			break;
+
+		case HOST1X_OPCODE_RESTART:
+			stream->ptr++;
+			fprintf(stderr, "HOST1X_OPCODE_RESTART\n");
+			break;
+
+		case HOST1X_OPCODE_GATHER:
+			stream->ptr++;
+			fprintf(stderr, "HOST1X_OPCODE_GATHER\n");
+			break;
+
+		case HOST1X_OPCODE_EXTEND:
+			stream->ptr++;
+			fprintf(stderr, "HOST1X_OPCODE_EXTEND\n");
+			break;
+
+		case HOST1X_OPCODE_CHDONE:
+			stream->ptr++;
+			fprintf(stderr, "HOST1X_OPCODE_CHDONE\n");
+			break;
+
+		default:
+			fprintf(stderr, "UNKNOWN: 0x%08x\n", *stream->ptr++);
+			break;
+		}
+	}
+}

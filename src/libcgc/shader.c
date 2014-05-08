@@ -835,11 +835,46 @@ static void fragment_shader_disassemble(uint32_t *words, size_t length)
 		fragment_sfu_disasm(sfu + i);
 }
 
+struct gr3d_context {
+	uint32_t regs[0x1000];
+	uint32_t alu[0x200];
+};
+
+struct gr3d_context *gr3d_context(void *ptr)
+{
+	return (struct gr3d_context *)ptr;
+}
+
+static void write_word(void *user, int classid, int offset, uint32_t value)
+{
+	struct gr3d_context *gr3d;
+	switch (classid) {
+	case HOST1X_CLASS_GR3D:
+		gr3d = gr3d_context(user);
+		switch (offset) {
+		case 0x804:
+			printf("GR3D: ALU[%03x]: %08x\n", gr3d->regs[0x803], value);
+			gr3d->alu[gr3d->regs[0x803]++] = value;
+			break;
+
+		default:
+			printf("GR3D: offset %03x => %08x\n", offset, value);
+			assert(0 <= offset && offset < 0x1000);
+			gr3d->regs[offset] = value;
+		}
+		break;
+
+	default:
+		printf("unknown class 0x%x: offset %03x => %08x\n", classid, offset, value);
+	}
+}
+
 static void shader_stream_dump(struct cgc_shader *shader, FILE *fp)
 {
 	struct cgc_fragment_shader *fs;
 	struct cgc_vertex_shader *vs;
 	struct host1x_stream stream;
+	struct gr3d_context gr3d_ctx;
 	struct cgc_header *header;
 	size_t length;
 	void *words;
@@ -871,7 +906,11 @@ static void shader_stream_dump(struct cgc_shader *shader, FILE *fp)
 
 	fprintf(fp, "stream @%p, %zu bytes\n", words, length);
 	host1x_stream_init(&stream, words, length);
-	host1x_stream_dump(&stream, fp);
+	stream.write_word = write_word;
+	stream.classid = HOST1X_CLASS_GR3D;
+	memset(&gr3d_ctx, 0, sizeof(gr3d_ctx));
+	stream.user = &gr3d_ctx;
+	host1x_stream_interpret(&stream);
 }
 
 static void cgc_shader_disassemble(struct cgc_shader *shader, FILE *fp)
