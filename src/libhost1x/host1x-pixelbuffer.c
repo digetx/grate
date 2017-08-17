@@ -132,7 +132,7 @@ int host1x_pixelbuffer_load_data(struct host1x *host1x,
 	HOST1X_BO_FLUSH(tmp->bo, tmp->bo->offset, data_size);
 
 	if (blit) {
-		err = host1x_gr2d_blit(host1x->gr2d, tmp, pixbuf,
+		err = host1x_gr2d_blit(host1x->gr2d_g2, tmp, pixbuf,
 				       0, 0, 0, 0,
 				       pixbuf->width, pixbuf->height);
 		host1x_pixelbuffer_free(tmp);

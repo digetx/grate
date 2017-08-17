@@ -61,7 +61,7 @@ static int host1x_gr2d_test(struct host1x_gr2d *gr2d)
 		return -ENOMEM;
 	}
 
-	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0x000, 0x051, 0x00));
+	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0x000, gr2d->classid, 0x00));
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_NONINCR(0x000, 0x0001));
 	host1x_pushbuf_push(pb, 0x000001 << 8 | syncpt->id);
 
@@ -167,7 +167,7 @@ int host1x_gr2d_clear_rect(struct host1x_gr2d *gr2d,
 		return -EINVAL;
 	}
 
-	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, 0x51, 0));
+	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, gr2d->classid, 0));
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_MASK(0x09, 9));
 	host1x_pushbuf_push(pb, 0x0000003a);
 	host1x_pushbuf_push(pb, 0x00000000);
@@ -321,7 +321,7 @@ yflip_setup:
 		return -ENOMEM;
 	}
 
-	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, 0x51, 0));
+	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, gr2d->classid, 0));
 
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_MASK(0x009, 0x9));
 	host1x_pushbuf_push(pb, 0x0000003a); /* trigger */
@@ -546,7 +546,7 @@ coords_check:
 		return -ENOMEM;
 	}
 
-	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, 0x52, 0));
+	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, gr2d->classid, 0));
 
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_MASK(0x009, 0xF09));
 	host1x_pushbuf_push(pb, 0x00000038); /* trigger */

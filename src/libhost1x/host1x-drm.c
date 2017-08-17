@@ -107,7 +107,8 @@ struct drm {
 	struct host1x base;
 
 	struct drm_display *display;
-	struct drm_gr2d *gr2d;
+	struct drm_gr2d *gr2d_g2;
+	struct drm_gr2d *gr2d_sb;
 	struct drm_gr3d *gr3d;
 
 	int fd;
@@ -618,19 +619,20 @@ static int drm_framebuffer_init(struct host1x *host1x,
 	return 0;
 }
 
-static int drm_channel_open(struct drm *drm, uint32_t class, uint64_t *channel)
+static int drm_channel_open(struct drm *drm, uint32_t *client, uint64_t *channel)
 {
 	struct drm_tegra_open_channel args;
 	int err;
 
 	memset(&args, 0, sizeof(args));
-	args.client = class;
+	args.client = *client;
 
 	err = ioctl(drm->fd, DRM_IOCTL_TEGRA_OPEN_CHANNEL, &args);
 	if (err < 0)
 		return -errno;
 
 	*channel = args.context;
+	*client = args.client;
 
 	return 0;
 }
@@ -754,13 +756,13 @@ static int drm_channel_wait(struct host1x_client *client, uint32_t fence,
 }
 
 static int drm_channel_init(struct drm *drm, struct drm_channel *channel,
-			    uint32_t class, unsigned int num_syncpts)
+			    uint32_t *client, unsigned int num_syncpts)
 {
 	struct host1x_syncpt *syncpts;
 	unsigned int i;
 	int err;
 
-	err = drm_channel_open(drm, class, &channel->context);
+	err = drm_channel_open(drm, client, &channel->context);
 	if (err < 0)
 		return err;
 
@@ -813,7 +815,8 @@ static void drm_channel_exit(struct drm_channel *channel)
 	free(channel->client.syncpts);
 }
 
-static int drm_gr2d_create(struct drm_gr2d **gr2dp, struct drm *drm)
+static int drm_gr2d_create(struct drm_gr2d **gr2dp, struct drm *drm,
+			   uint32_t client)
 {
 	struct drm_gr2d *gr2d;
 	int err;
@@ -822,13 +825,14 @@ static int drm_gr2d_create(struct drm_gr2d **gr2dp, struct drm *drm)
 	if (!gr2d)
 		return -ENOMEM;
 
-	err = drm_channel_init(drm, &gr2d->channel, HOST1X_CLASS_GR2D, 1);
+	err = drm_channel_init(drm, &gr2d->channel, &client, 1);
 	if (err < 0) {
 		free(gr2d);
 		return err;
 	}
 
 	gr2d->base.client = &gr2d->channel.client;
+	gr2d->base.classid = client;
 
 	err = host1x_gr2d_init(&drm->base, &gr2d->base);
 	if (err < 0) {
@@ -854,13 +858,14 @@ static void drm_gr2d_close(struct drm_gr2d *gr2d)
 static int drm_gr3d_create(struct drm_gr3d **gr3dp, struct drm *drm)
 {
 	struct drm_gr3d *gr3d;
+	uint32_t client = DRM_TEGRA_CLIENT_GR3D;
 	int err;
 
 	gr3d = calloc(1, sizeof(*gr3d));
 	if (!gr3d)
 		return -ENOMEM;
 
-	err = drm_channel_init(drm, &gr3d->channel, HOST1X_CLASS_GR3D, 1);
+	err = drm_channel_init(drm, &gr3d->channel, &client, 1);
 	if (err < 0) {
 		free(gr3d);
 		return err;
@@ -894,7 +899,8 @@ static void drm_close(struct host1x *host1x)
 	struct drm *drm = to_drm(host1x);
 
 	drm_gr3d_close(drm->gr3d);
-	drm_gr2d_close(drm->gr2d);
+	drm_gr2d_close(drm->gr2d_sb);
+	drm_gr2d_close(drm->gr2d_g2);
 	drm_display_close(drm->display);
 
 	close(drm->fd);
@@ -925,7 +931,15 @@ struct host1x *host1x_drm_open(int fd)
 	drm->base.close = drm_close;
 	drm->base.bo_import = drm_bo_import;
 
-	err = drm_gr2d_create(&drm->gr2d, drm);
+	err = drm_gr2d_create(&drm->gr2d_g2, drm, DRM_TEGRA_CLIENT_GR2D_G2);
+	if (err < 0) {
+		host1x_error("drm_gr2d_create() failed: %d\n", err);
+		free(drm);
+		close(fd);
+		return NULL;
+	}
+
+	err = drm_gr2d_create(&drm->gr2d_sb, drm, DRM_TEGRA_CLIENT_GR2D_SB);
 	if (err < 0) {
 		host1x_error("drm_gr2d_create() failed: %d\n", err);
 		free(drm);
@@ -941,7 +955,8 @@ struct host1x *host1x_drm_open(int fd)
 		return NULL;
 	}
 
-	drm->base.gr2d = &drm->gr2d->base;
+	drm->base.gr2d_g2 = &drm->gr2d_g2->base;
+	drm->base.gr2d_sb = &drm->gr2d_sb->base;
 	drm->base.gr3d = &drm->gr3d->base;
 
 	return &drm->base;

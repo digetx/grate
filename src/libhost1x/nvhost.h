@@ -87,7 +87,8 @@ struct nvhost_display {
 
 struct nvhost_gr2d {
 	struct nvhost_client client;
-	struct host1x_gr2d base;
+	struct host1x_gr2d g2_base;
+	struct host1x_gr2d sb_base;
 };
 
 struct nvhost_gr3d {

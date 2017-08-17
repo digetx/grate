@@ -171,7 +171,7 @@ static void host1x_nvhost_close(struct host1x *host1x)
 static int nvhost_framebuffer_init(struct host1x *host1x,
 				   struct host1x_framebuffer *fb)
 {
-	struct host1x_gr2d *gr2d = host1x_get_gr2d(host1x);
+	struct host1x_gr2d *gr2d = host1x_get_gr2d_g2(host1x);
 	return host1x_gr2d_clear(gr2d, fb->pixbuf, 0x00000000);
 }
 
@@ -202,7 +202,8 @@ struct host1x *host1x_nvhost_open(void)
 	if (!nvhost->gr3d)
 		return NULL;
 
-	nvhost->base.gr2d = &nvhost->gr2d->base;
+	nvhost->base.gr2d_g2 = &nvhost->gr2d->g2_base;
+	nvhost->base.gr2d_sb = &nvhost->gr2d->sb_base;
 	nvhost->base.gr3d = &nvhost->gr3d->base;
 	nvhost->base.framebuffer_init = nvhost_framebuffer_init;
 

@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	gr2d = host1x_get_gr2d(host1x);
+	gr2d = host1x_get_gr2d_g2(host1x);
 	if (!gr2d) {
 		fprintf(stderr, "host1x_get_gr2d() failed\n");
 		return 1;

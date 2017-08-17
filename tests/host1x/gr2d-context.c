@@ -51,7 +51,7 @@ static struct ctx2d *create_context()
 		abort();
 	}
 
-	ctx->gr2d = host1x_get_gr2d(ctx->host1x);
+	ctx->gr2d = host1x_get_gr2d_g2(ctx->host1x);
 	if (!ctx->gr2d) {
 		fprintf(stderr, "host1x_get_gr2d() failed\n");
 		abort();
@@ -101,7 +101,7 @@ static void prepare_context(struct ctx2d *ctx,
 	if (!pb)
 		abort();
 
-	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, 0x51, 0));
+	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0, ctx->gr2d->classid, 0));
 
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_MASK(0x009, 0x9));
 	host1x_pushbuf_push(pb, 0x0000003a); /* trigger */

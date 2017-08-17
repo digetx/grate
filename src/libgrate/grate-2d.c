@@ -38,7 +38,7 @@ void grate_clear_color(struct grate *grate, float red, float green,
 
 void grate_clear(struct grate *grate)
 {
-	struct host1x_gr2d *gr2d = host1x_get_gr2d(grate->host1x);
+	struct host1x_gr2d *gr2d = host1x_get_gr2d_g2(grate->host1x);
 	struct host1x_framebuffer *front = grate->fb->front;
 	struct host1x_framebuffer *back = grate->fb->back;
 	struct host1x_pixelbuffer *pixbuf;

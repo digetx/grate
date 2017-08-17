@@ -72,9 +72,14 @@ struct host1x_display *host1x_get_display(struct host1x *host1x)
 	return host1x->display;
 }
 
-struct host1x_gr2d *host1x_get_gr2d(struct host1x *host1x)
+struct host1x_gr2d *host1x_get_gr2d_g2(struct host1x *host1x)
 {
-	return host1x->gr2d;
+	return host1x->gr2d_g2;
+}
+
+struct host1x_gr2d *host1x_get_gr2d_sb(struct host1x *host1x)
+{
+	return host1x->gr2d_sb;
 }
 
 struct host1x_gr3d *host1x_get_gr3d(struct host1x *host1x)

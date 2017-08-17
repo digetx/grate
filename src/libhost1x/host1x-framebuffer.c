@@ -179,7 +179,7 @@ int host1x_framebuffer_save(struct host1x *host1x,
 		if (!detiled_pixbuf)
 			return -ENOMEM;
 
-		err = host1x_gr2d_blit(host1x->gr2d,
+		err = host1x_gr2d_blit(host1x->gr2d_g2,
 				       tiled_pixbuf,
 				       detiled_pixbuf,
 				       0, 0, 0, 0,

@@ -93,6 +93,7 @@ struct host1x_gr2d {
 	struct host1x_client *client;
 	struct host1x_bo *commands;
 	struct host1x_bo *scratch;
+	unsigned int classid;
 };
 
 int host1x_gr2d_init(struct host1x *host1x, struct host1x_gr2d *gr2d);
@@ -119,7 +120,8 @@ struct host1x {
 				       uint32_t handle);
 
 	struct host1x_display *display;
-	struct host1x_gr2d *gr2d;
+	struct host1x_gr2d *gr2d_g2;
+	struct host1x_gr2d *gr2d_sb;
 	struct host1x_gr3d *gr3d;
 };
 

@@ -51,9 +51,20 @@ struct nvhost_gr2d *nvhost_gr2d_open(struct nvhost *nvhost)
 		return NULL;
 	}
 
-	gr2d->base.client = &gr2d->client.base;
+	gr2d->g2_base.client = &gr2d->client.base;
+	gr2d->g2_base.classid = 0x51;
 
-	err = host1x_gr2d_init(&nvhost->base, &gr2d->base);
+	err = host1x_gr2d_init(&nvhost->base, &gr2d->g2_base);
+	if (err < 0) {
+		nvhost_client_exit(&gr2d->client);
+		free(gr2d);
+		return NULL;
+	}
+
+	gr2d->sb_base.client = &gr2d->client.base;
+	gr2d->sb_base.classid = 0x52;
+
+	err = host1x_gr2d_init(&nvhost->base, &gr2d->sb_base);
 	if (err < 0) {
 		nvhost_client_exit(&gr2d->client);
 		free(gr2d);
@@ -67,7 +78,8 @@ void nvhost_gr2d_close(struct nvhost_gr2d *gr2d)
 {
 	if (gr2d) {
 		nvhost_client_exit(&gr2d->client);
-		host1x_gr2d_exit(&gr2d->base);
+		host1x_gr2d_exit(&gr2d->g2_base);
+		host1x_gr2d_exit(&gr2d->sb_base);
 	}
 
 	free(gr2d);

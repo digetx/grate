@@ -82,7 +82,7 @@ static void *fbdata(struct xcb_stuff *stuff, struct host1x_framebuffer *fb)
 	if (!stuff->pixbuf)
 		return NULL;
 
-	err = host1x_gr2d_blit(stuff->host1x->gr2d,
+	err = host1x_gr2d_blit(stuff->host1x->gr2d_g2,
 			       pixbuf, stuff->pixbuf,
 			       0, 0, 0, 0,
 			       WIN_WIDTH, -WIN_HEIGHT);
