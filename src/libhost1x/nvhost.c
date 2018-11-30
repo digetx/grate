@@ -386,6 +386,7 @@ int nvhost_client_init(struct nvhost_client *client, struct nvmap *nvmap,
 	if (err < 0)
 		return err;
 
+	client->base.job_append = host1x_job_append_common;
 	client->base.submit = nvhost_client_submit;
 	client->base.flush = nvhost_client_flush;
 	client->base.wait = nvhost_client_wait;

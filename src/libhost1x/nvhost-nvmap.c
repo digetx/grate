@@ -33,7 +33,7 @@
 
 #include <png.h>
 
-#include "host1x-private.h"
+#include "host1x.h"
 #include "nvhost-nvmap.h"
 
 struct nvmap_create_handle {

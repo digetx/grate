@@ -63,6 +63,8 @@ static uint32_t float_to_fx10(float f)
 struct grate_3d_ctx * grate_3d_alloc_ctx(struct grate *grate)
 {
 	struct grate_3d_ctx *ctx = calloc(1, sizeof(struct grate_3d_ctx));
+	struct host1x *host1x = grate->host1x;
+	uint32_t *ptr;
 
 	if (!ctx) {
 		grate_error("Failed to allocate context\n");
@@ -70,6 +72,29 @@ struct grate_3d_ctx * grate_3d_alloc_ctx(struct grate *grate)
 	}
 
 	ctx->grate = grate;
+
+	if (host1x->drm_v2) {
+		ctx->uniforms_bo = HOST1X_BO_CREATE(host1x, (256 * 4 + 32) * 4,
+						    HOST1X_BO_CREATE_FLAG_GATHER);
+
+		host1x_bo_mmap(ctx->uniforms_bo, (void**)&ptr);
+
+		ctx->gather_vs_uniforms.data_offset = 0;
+		ctx->gather_vs_uniforms.reg_offset = TGR3D_VP_UPLOAD_CONST;
+		ctx->gather_vs_uniforms.count = 256 * 4;
+		ctx->gather_vs_uniforms.incr = 0;
+
+		ctx->gather_fs_uniforms.data_offset = 256 * 4;
+		ctx->gather_fs_uniforms.reg_offset = TGR3D_FP_CONST(0);
+		ctx->gather_fs_uniforms.count = 32;
+		ctx->gather_fs_uniforms.incr = 1;
+
+		ctx->vs_uniforms = ptr;
+		ctx->fs_uniforms = ptr + 256 * 4;
+	} else {
+		ctx->vs_uniforms = ctx->vs_uniforms_data;
+		ctx->fs_uniforms = ctx->fs_uniforms_data;
+	}
 
 	return ctx;
 }
@@ -238,10 +263,10 @@ int grate_3d_ctx_bind_program(struct grate_3d_ctx *ctx,
 	ctx->program = program;
 
 	memcpy(ctx->vs_uniforms, program->vs_constants,
-	       sizeof(ctx->vs_uniforms));
+	       sizeof(ctx->vs_uniforms_data));
 
 	memcpy(ctx->fs_uniforms, program->fs_constants,
-	       sizeof(ctx->fs_uniforms));
+	       sizeof(ctx->fs_uniforms_data));
 
 	return 0;
 }

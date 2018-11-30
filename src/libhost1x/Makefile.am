@@ -11,14 +11,14 @@ libhost1x_la_CFLAGS = \
 
 libhost1x_la_SOURCES = \
 	host1x.c \
-	host1x-drm.c \
+	host1x-drm-v1.c \
+	host1x-drm-v2.c \
 	host1x-dummy.c \
 	host1x-framebuffer.c \
 	host1x-gr2d.c \
 	host1x-gr3d.c \
 	host1x-nvhost.c \
 	host1x-pixelbuffer.c \
-	host1x-private.h \
 	nvhost.c \
 	nvhost-display.c \
 	nvhost-gr2d.c \
@@ -28,6 +28,7 @@ libhost1x_la_SOURCES = \
 	nvhost-nvmap.h \
 	nvhost-nvmap.h \
 	tegra_dc_ext.h \
+	tegra_drm_legacy.h \
 	tegra_drm.h \
 	x11-display.c \
 	x11-display.h

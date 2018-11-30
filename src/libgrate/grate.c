@@ -34,7 +34,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "../libhost1x/host1x-private.h"
 #include "libgrate-private.h"
 
 #include "grate.h"

@@ -23,7 +23,6 @@
 
 #include <string.h>
 
-#include "host1x-private.h"
 #include "nvhost.h"
 
 static int nvhost_bo_mmap(struct host1x_bo *bo)

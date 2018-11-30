@@ -18,6 +18,17 @@ struct grate_uniform {
 	const char *name;
 };
 
+struct grate_gather {
+	/* for some gathers there is a need to reset HW counter register */
+	unsigned reg_init_offset;
+	unsigned reg_init_val;
+
+	unsigned data_offset;
+	unsigned reg_offset;
+	unsigned count;
+	bool incr : 1;
+};
+
 struct grate_shader {
 	struct cgc_shader *cgc;
 	unsigned num_words;
@@ -36,6 +47,10 @@ struct grate_shader {
 			unsigned linker_inst_nb;
 		};
 	};
+
+	struct host1x_bo *gather_bo;
+	struct grate_gather gathers[12];
+	unsigned num_gathers;
 };
 
 struct grate_program {
@@ -84,8 +99,15 @@ struct grate_texture {
 };
 
 struct grate_3d_ctx {
-	uint32_t vs_uniforms[256 * 4];
-	uint32_t fs_uniforms[32];
+	uint32_t *vs_uniforms;
+	uint32_t *fs_uniforms;
+
+	uint32_t vs_uniforms_data[256 * 4];
+	uint32_t fs_uniforms_data[32];
+
+	struct grate_gather gather_vs_uniforms;
+	struct grate_gather gather_fs_uniforms;
+	struct host1x_bo *uniforms_bo;
 
 	struct grate *grate;
 	struct grate_program *program;

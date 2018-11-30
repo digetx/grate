@@ -25,7 +25,6 @@
 #define GRATE_HOST1X_NVHOST_H 1
 
 #include "host1x.h"
-#include "host1x-private.h"
 
 #include "nvhost-nvmap.h"
 

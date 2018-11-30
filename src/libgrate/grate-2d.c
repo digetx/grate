@@ -22,7 +22,6 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "../libhost1x/host1x-private.h"
 #include "libgrate-private.h"
 
 #include "grate.h"

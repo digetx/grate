@@ -27,7 +27,7 @@
 
 #include <png.h>
 
-#include "host1x-private.h"
+#include "host1x.h"
 
 #if 0
 static void detile(void *target, struct host1x_pixelbuffer *pb,

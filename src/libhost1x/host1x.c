@@ -27,24 +27,37 @@
 #include <string.h>
 
 #include "host1x.h"
-#include "host1x-private.h"
 
 struct host1x *host1x_open(bool open_display, int fd)
 {
 	struct host1x *host1x;
 
-	printf("Looking for Tegra DRM interface...");
+	printf("Looking for Tegra DRM v2 interface...");
 	fflush(stdout);
 
-	host1x = host1x_drm_open(fd);
+	host1x = host1x_drm_open_v2(fd);
 	if (host1x) {
 		printf("found\n");
 		if (open_display)
-			host1x_drm_display_init(host1x);
+			host1x_drm_display_init_v2(host1x);
 		return host1x;
 	}
 
 	printf("not found\n");
+
+	printf("Looking for Tegra DRM v1 interface...");
+	fflush(stdout);
+
+	host1x = host1x_drm_open_v1(fd);
+	if (host1x) {
+		printf("found\n");
+		if (open_display)
+			host1x_drm_display_init_v1(host1x);
+		return host1x;
+	}
+
+	printf("not found\n");
+
 	printf("Looking for L4T interface...");
 	fflush(stdout);
 
@@ -249,7 +262,8 @@ chk_err:
 	return NULL;
 }
 
-struct host1x_job *host1x_job_create(uint32_t syncpt, uint32_t increments)
+struct host1x_job *host1x_job_create(struct host1x_client *client,
+				     uint32_t syncpt, uint32_t increments)
 {
 	struct host1x_job *job;
 
@@ -257,6 +271,7 @@ struct host1x_job *host1x_job_create(uint32_t syncpt, uint32_t increments)
 	if (!job)
 		return NULL;
 
+	job->client = client;
 	job->syncpt = syncpt;
 	job->syncpt_incrs = increments;
 
@@ -276,44 +291,10 @@ void host1x_job_free(struct host1x_job *job)
 	free(job);
 }
 
-struct host1x_pushbuf *host1x_job_append(struct host1x_job *job,
-					 struct host1x_bo *bo,
-					 unsigned long offset)
-{
-	struct host1x_pushbuf *pb;
-	size_t size;
-
-	if (!bo->ptr)
-		return NULL;
-
-	size = (job->num_pushbufs + 1) * sizeof(*pb);
-
-	pb = realloc(job->pushbufs, size);
-	if (!pb)
-		return NULL;
-
-	job->pushbufs = pb;
-
-	pb = &job->pushbufs[job->num_pushbufs++];
-	memset(pb, 0, sizeof(*pb));
-
-	pb->ptr = bo->ptr + offset;
-	pb->offset = offset;
-	pb->bo = bo;
-
-	return pb;
-}
-
-int host1x_pushbuf_push(struct host1x_pushbuf *pb, uint32_t word)
-{
-	*pb->ptr++ = word;
-	pb->length++;
-
-	return 0;
-}
-
-int host1x_pushbuf_relocate(struct host1x_pushbuf *pb, struct host1x_bo *target,
-			    unsigned long offset, unsigned long shift)
+static int host1x_pushbuf_relocate(struct host1x_pushbuf *pb,
+				   struct host1x_bo *target,
+				   unsigned long offset,
+				   unsigned long shift)
 {
 	struct host1x_pushbuf_reloc *reloc;
 	size_t size;
@@ -333,7 +314,40 @@ int host1x_pushbuf_relocate(struct host1x_pushbuf *pb, struct host1x_bo *target,
 	reloc->target_offset = offset;
 	reloc->shift = shift;
 
+	host1x_pushbuf_push(pb, 0xdeadbeef);
+
 	return 0;
+}
+
+struct host1x_pushbuf *host1x_job_append_common(struct host1x_job *job,
+						struct host1x_bo *bo,
+						unsigned long offset)
+{
+	struct host1x_pushbuf *pb;
+	size_t size;
+
+	if (!bo->ptr)
+		return NULL;
+
+	size = (job->num_pushbufs + 1) * sizeof(*pb);
+
+	pb = realloc(job->pushbufs, size);
+	if (!pb)
+		return NULL;
+
+	job->pushbufs = pb;
+
+	pb = &job->pushbufs[job->num_pushbufs++];
+	memset(pb, 0, sizeof(*pb));
+
+	pb->start_ptr = bo->ptr + offset;
+	pb->ptr = pb->start_ptr;
+	pb->offset = offset;
+	pb->bo = bo;
+
+	pb->push_reloc = host1x_pushbuf_relocate;
+
+	return pb;
 }
 
 int host1x_client_submit(struct host1x_client *client, struct host1x_job *job)

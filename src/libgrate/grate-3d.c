@@ -24,8 +24,8 @@
  */
 
 #include <math.h>
+#include <string.h>
 
-#include "../libhost1x/host1x-private.h"
 #include "libgrate-private.h"
 
 #include "host1x.h"
@@ -40,13 +40,60 @@
 #define TGR3D_BOOL(reg_name, field_name, boolean) \
 	((boolean) ? TGR3D_ ## reg_name ## _ ## field_name : 0)
 
-static void grate_shader_emit(struct host1x_pushbuf *pb,
-			      struct grate_shader *shader)
+static void grate_shader_load_gather(struct host1x *host1x,
+				     struct grate_shader *shader)
 {
+	void *ptr;
+
+	if (shader->gather_bo)
+		return;
+
+	shader->gather_bo = HOST1X_BO_CREATE(host1x,
+					     shader->num_words * 4,
+					     HOST1X_BO_CREATE_FLAG_GATHER);
+
+	host1x_bo_mmap(shader->gather_bo, &ptr);
+
+	memcpy(ptr, shader->words, shader->num_words * 4);
+}
+
+static void grate_shader_push_gathers(struct host1x_pushbuf *pb,
+				      struct grate_shader *shader)
+{
+	struct grate_gather *gather;
 	unsigned i;
 
-	for (i = 0; i < shader->num_words; i++)
-		host1x_pushbuf_push(pb, shader->words[i]);
+	for (i = 0; i < shader->num_gathers; i++) {
+		gather = &shader->gathers[i];
+
+		if (gather->reg_init_offset)
+			host1x_pushbuf_push(pb,
+				HOST1X_OPCODE_IMM(gather->reg_init_offset,
+						  gather->reg_init_val));
+
+		host1x_pushbuf_push(pb,
+			HOST1X_OPCODE_GATHER(gather->reg_offset, gather->count,
+					     gather->incr));
+
+		HOST1X_PUSHBUF_RELOCATE(pb, shader->gather_bo,
+					gather->data_offset, 0);
+	}
+}
+
+static void grate_shader_emit(struct host1x_pushbuf *pb,
+			      struct grate_shader *shader,
+			      struct grate_3d_ctx *ctx)
+{
+	struct host1x *host1x = ctx->grate->host1x;
+	unsigned i;
+
+	if (host1x->drm_v2) {
+		grate_shader_load_gather(host1x, shader);
+		grate_shader_push_gathers(pb, shader);
+	} else {
+		for (i = 0; i < shader->num_words; i++)
+			host1x_pushbuf_push(pb, shader->words[i]);
+	}
 }
 
 static void grate_3d_begin(struct host1x_pushbuf *pb)
@@ -293,7 +340,6 @@ static void grate_3d_relocate_render_target(struct host1x_pushbuf *pb,
 {
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(TGR3D_RT_PTR(index), 1));
 	HOST1X_PUSHBUF_RELOCATE(pb, bo, offset, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 }
 
 static void grate_3d_set_point_coord_range(struct host1x_pushbuf *pb,
@@ -352,27 +398,53 @@ static void grate_3d_set_used_tram_rows_nb(struct host1x_pushbuf *pb,
 static void grate_3d_upload_vp_constants(struct host1x_pushbuf *pb,
 					 struct grate_3d_ctx *ctx)
 {
+	struct host1x *host1x = ctx->grate->host1x;
+	struct grate_gather *gather;
 	unsigned i;
 
 	host1x_pushbuf_push(pb,
 			HOST1X_OPCODE_IMM(TGR3D_VP_UPLOAD_CONST_ID, 0));
 
-	host1x_pushbuf_push(pb,
+	if (host1x->drm_v2) {
+		gather = &ctx->gather_vs_uniforms;
+
+		host1x_pushbuf_push(pb,
+			HOST1X_OPCODE_GATHER(gather->reg_offset, gather->count,
+					     gather->incr));
+
+		HOST1X_PUSHBUF_RELOCATE(pb, ctx->uniforms_bo,
+					gather->data_offset, 0);
+	} else {
+		host1x_pushbuf_push(pb,
 			HOST1X_OPCODE_NONINCR(TGR3D_VP_UPLOAD_CONST, 256 * 4));
 
-	for (i = 0; i < 256 * 4; i++)
-		host1x_pushbuf_push(pb, ctx->vs_uniforms[i]);
+		for (i = 0; i < 256 * 4; i++)
+			host1x_pushbuf_push(pb, ctx->vs_uniforms[i]);
+	}
 }
 
 static void grate_3d_upload_fp_constants(struct host1x_pushbuf *pb,
 					 struct grate_3d_ctx *ctx)
 {
+	struct host1x *host1x = ctx->grate->host1x;
+	struct grate_gather *gather;
 	unsigned i;
 
-	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(TGR3D_FP_CONST(0), 32));
+	if (host1x->drm_v2) {
+		gather = &ctx->gather_fs_uniforms;
 
-	for (i = 0; i < 32; i++)
-		host1x_pushbuf_push(pb, ctx->fs_uniforms[i]);
+		host1x_pushbuf_push(pb,
+			HOST1X_OPCODE_GATHER(gather->reg_offset, gather->count,
+					     gather->incr));
+
+		HOST1X_PUSHBUF_RELOCATE(pb, ctx->uniforms_bo,
+					gather->data_offset, 0);
+	} else {
+		host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(TGR3D_FP_CONST(0), 32));
+
+		for (i = 0; i < 32; i++)
+			host1x_pushbuf_push(pb, ctx->fs_uniforms[i]);
+	}
 }
 
 static void grate_3d_set_polygon_offset(struct host1x_pushbuf *pb,
@@ -390,7 +462,6 @@ static void grate_3d_relocate_primitive_indices(struct host1x_pushbuf *pb,
 {
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(TGR3D_INDEX_PTR, 1));
 	HOST1X_PUSHBUF_RELOCATE(pb, indices, offset, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 }
 
 static void grate_3d_set_draw_params(struct host1x_pushbuf *pb,
@@ -555,7 +626,6 @@ static void grate_3d_set_attribute(struct host1x_pushbuf *pb,
 			    HOST1X_OPCODE_INCR(TGR3D_ATTRIB_PTR(index), 2));
 
 	HOST1X_PUSHBUF_RELOCATE(pb, bo, offset, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 	host1x_pushbuf_push(pb, value);
 }
 
@@ -644,7 +714,6 @@ static void grate_3d_relocate_texture(struct host1x_pushbuf *pb,
 	host1x_pushbuf_push(pb,
 			    HOST1X_OPCODE_INCR(TGR3D_TEXTURE_POINTER(index), 1));
 	HOST1X_PUSHBUF_RELOCATE(pb, bo, offset, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 }
 
 static void grate_3d_set_texture_desc(struct host1x_pushbuf *pb,
@@ -832,9 +901,9 @@ static void grate_3d_setup_context(struct host1x_pushbuf *pb,
 	grate_3d_setup_textures(pb, ctx);
 
 	grate_3d_reset_program(pb);
-	grate_shader_emit(pb, ctx->program->vs);
-	grate_shader_emit(pb, ctx->program->fs);
-	grate_shader_emit(pb, ctx->program->linker);
+	grate_shader_emit(pb, ctx->program->vs, ctx);
+	grate_shader_emit(pb, ctx->program->fs, ctx);
+	grate_shader_emit(pb, ctx->program->linker, ctx);
 }
 
 static void grate_3d_check_render_targets_guard(struct grate_3d_ctx *ctx)
@@ -872,7 +941,8 @@ void grate_3d_draw_elements(struct grate_3d_ctx *ctx,
 {
 	struct grate *grate = ctx->grate;
 	struct host1x_gr3d *gr3d = host1x_get_gr3d(grate->host1x);
-	struct host1x_syncpt *syncpt = &gr3d->client->syncpts[0];
+	struct host1x_client *client = gr3d->client;
+	struct host1x_syncpt *syncpt = &client->syncpts[0];
 	struct host1x_pushbuf *pb;
 	struct host1x_job *job;
 	uint32_t fence;
@@ -912,7 +982,7 @@ void grate_3d_draw_elements(struct grate_3d_ctx *ctx,
 		return;
 	}
 
-	job = HOST1X_JOB_CREATE(syncpt->id, 1);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 1);
 	if (!job)
 		return;
 

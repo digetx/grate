@@ -1,5 +1,6 @@
 libhost1x_sources =  files(
 	'host1x.c',
+	'host1x-host1x-drm-legacy.c',
 	'host1x-drm.c',
 	'host1x-dummy.c',
 	'host1x-framebuffer.c',
@@ -7,7 +8,6 @@ libhost1x_sources =  files(
 	'host1x-gr3d.c',
 	'host1x-nvhost.c',
 	'host1x-pixelbuffer.c',
-	'host1x-private.h',
 	'nvhost.c',
 	'nvhost-display.c',
 	'nvhost-gr2d.c',
@@ -16,7 +16,8 @@ libhost1x_sources =  files(
 	'nvhost-nvmap.c',
 	'nvhost-nvmap.h',
 	'nvhost-nvmap.h',
-	'tegra_dc_ext.h',
+	'tegra_dc_ext.h',,
+	'tegra_drm_legacy.h',
 	'tegra_drm.h',
 	'x11-display.c',
 	'x11-display.h'

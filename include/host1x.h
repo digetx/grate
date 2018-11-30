@@ -26,6 +26,7 @@
 #define GRATE_HOST1X_H 1
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +36,7 @@
 #endif
 
 enum host1x_class {
+	HOST1X_CLASS_HOST1X = 0x01,
 	HOST1X_CLASS_GR2D = 0x51,
 	HOST1X_CLASS_GR3D = 0x60,
 };
@@ -69,6 +71,25 @@ struct host1x_gr2d;
 struct host1x_gr3d;
 struct host1x_bo_priv;
 struct host1x;
+struct host1x_framebuffer;
+struct host1x_job;
+
+#ifndef container_of
+#define container_of(ptr, type, member) ({ \
+		const typeof(((type *)0)->member) *__mptr = (ptr); \
+		(type *)((char *)__mptr - offsetof(type, member)); \
+	})
+#endif
+
+#define HOST1X_BO_CREATE_FLAG_TILED		(1 << 8)
+#define HOST1X_BO_CREATE_FLAG_BOTTOM_UP		(1 << 9)
+#define HOST1X_BO_CREATE_FLAG_GATHER		(1 << 10)
+#define HOST1X_BO_CREATE_DRM_FLAGS_MASK		0x700
+
+struct host1x_syncpt {
+	uint32_t id;
+	uint32_t value;
+};
 
 struct host1x_bo {
 	struct host1x_bo_priv *priv;
@@ -78,6 +99,104 @@ struct host1x_bo {
 	size_t size;
 	void *ptr;
 };
+
+struct host1x_bo_priv {
+	int (*mmap)(struct host1x_bo *bo);
+	int (*invalidate)(struct host1x_bo *bo, unsigned long offset,
+			  size_t length);
+	int (*flush)(struct host1x_bo *bo, unsigned long offset, size_t length);
+	int (*export)(struct host1x_bo *bo, uint32_t *handle);
+	void (*free)(struct host1x_bo *bo);
+	struct host1x_bo* (*clone)(struct host1x_bo *bo);
+};
+
+static inline unsigned long host1x_bo_get_offset(struct host1x_bo *bo,
+						 void *ptr)
+{
+	return (unsigned long)ptr - (unsigned long)bo->ptr;
+}
+
+struct host1x_display {
+	unsigned int width;
+	unsigned int height;
+	void *priv;
+	bool needs_explicit_vsync;
+
+	int (*create_overlay)(struct host1x_display *display,
+			      struct host1x_overlay **overlayp);
+	int (*set)(struct host1x_display *display,
+		   struct host1x_framebuffer *fb, bool vsync, bool reflect_y);
+};
+
+struct host1x_overlay {
+	int (*close)(struct host1x_overlay *overlay);
+	int (*set)(struct host1x_overlay *overlay,
+		   struct host1x_framebuffer *fb, unsigned int x,
+		   unsigned int y, unsigned int width, unsigned int height,
+		   bool vsync, bool reflect_y);
+};
+
+struct host1x_client {
+	struct host1x_syncpt *syncpts;
+	unsigned int num_syncpts;
+
+	int (*submit)(struct host1x_client *client, struct host1x_job *job);
+	int (*flush)(struct host1x_client *client, uint32_t *fence);
+	int (*wait)(struct host1x_client *client, uint32_t fence,
+		    uint32_t timeout);
+	struct host1x_pushbuf * (*job_append)(struct host1x_job *job,
+					      struct host1x_bo *bo,
+					      unsigned long offset);
+};
+
+struct host1x_gr2d {
+	struct host1x_client *client;
+	struct host1x_bo *commands;
+	struct host1x_bo *scratch;
+};
+
+int host1x_gr2d_init(struct host1x *host1x, struct host1x_gr2d *gr2d);
+void host1x_gr2d_exit(struct host1x_gr2d *gr2d);
+
+struct host1x_gr3d {
+	struct host1x_client *client;
+	struct host1x_bo *commands;
+	struct host1x_bo *attributes;
+};
+
+int host1x_gr3d_init(struct host1x *host1x, struct host1x_gr3d *gr3d);
+void host1x_gr3d_exit(struct host1x_gr3d *gr3d);
+
+struct host1x {
+	struct host1x_bo *(*bo_create)(struct host1x *host1x,
+				       struct host1x_bo_priv *priv,
+				       size_t size, unsigned long flags);
+	int (*framebuffer_init)(struct host1x *host1x,
+				struct host1x_framebuffer *fb);
+	void (*close)(struct host1x *host1x);
+	struct host1x_bo *(*bo_import)(struct host1x *host1x,
+				       struct host1x_bo_priv *priv,
+				       uint32_t handle);
+
+	struct host1x_display *display;
+	struct host1x_gr2d *gr2d;
+	struct host1x_gr3d *gr3d;
+	bool drm_v2 : 1;
+};
+
+struct host1x *host1x_nvhost_open(void);
+void host1x_nvhost_display_init(struct host1x *host1x);
+
+struct host1x *host1x_drm_open_v1(int fd);
+void host1x_drm_display_init_v1(struct host1x *host1x);
+
+struct host1x *host1x_drm_open_v2(int fd);
+void host1x_drm_display_init_v2(struct host1x *host1x);
+
+struct host1x *host1x_dummy_open(void);
+
+#define host1x_error(fmt, args...) \
+	fprintf(stderr, "ERROR: %s: %d: " fmt, __func__, __LINE__, ##args)
 
 #define PIX_BUF_FMT(id, bpp) \
 	((id) << 8 | (bpp))
@@ -295,6 +414,8 @@ static inline struct host1x_bo *host1x_bo_import_helper(struct host1x *host1x,
 	((0x3 << 28) | (((offset) & 0xfff) << 16) | ((mask) & 0xffff))
 #define HOST1X_OPCODE_IMM(offset, data) \
 	((0x4 << 28) | (((offset) & 0xfff) << 16) | ((data) & 0xffff))
+#define HOST1X_OPCODE_GATHER(offset, count, incr) \
+	((0x6 << 28) | (((offset) & 0xfff) << 16) | (1 << 15) | (!!(incr) << 14) | ((count) & 0x3fff))
 #define HOST1X_OPCODE_EXTEND(subop, value) \
 	((0xeu << 28) | (((subop) & 0xf) << 24) | ((value) & 0xffffff))
 
@@ -313,8 +434,23 @@ struct host1x_pushbuf {
 	struct host1x_pushbuf_reloc *relocs;
 	unsigned long num_relocs;
 
+	uint32_t *start_ptr;
 	uint32_t *ptr;
+
+	unsigned long patch_data_length;
+	uint32_t *patch_data;
+
+	int (*push_reloc)(struct host1x_pushbuf *pb, struct host1x_bo *target,
+			  unsigned long offset, unsigned long shift);
 };
+
+static inline int host1x_pushbuf_push(struct host1x_pushbuf *pb, uint32_t word)
+{
+	*pb->ptr++ = word;
+	pb->length++;
+
+	return 0;
+}
 
 struct host1x_job {
 	uint32_t syncpt;
@@ -322,36 +458,30 @@ struct host1x_job {
 
 	struct host1x_pushbuf *pushbufs;
 	unsigned int num_pushbufs;
+
+	struct host1x_client *client;
 };
 
-struct host1x_job *host1x_job_create(uint32_t syncpt, uint32_t increments);
+struct host1x_job *host1x_job_create(struct host1x_client *client,
+				     uint32_t syncpt, uint32_t increments);
 void host1x_job_free(struct host1x_job *job);
 struct host1x_pushbuf *host1x_job_append(struct host1x_job *job,
 					 struct host1x_bo *bo,
 					 unsigned long offset);
-int host1x_pushbuf_push(struct host1x_pushbuf *pb, uint32_t word);
-int host1x_pushbuf_relocate(struct host1x_pushbuf *pb, struct host1x_bo *target,
-			    unsigned long offset, unsigned long shift);
+struct host1x_pushbuf *host1x_job_append_common(struct host1x_job *job,
+						struct host1x_bo *bo,
+						unsigned long offset);
 int host1x_client_submit(struct host1x_client *client, struct host1x_job *job);
 int host1x_client_flush(struct host1x_client *client, uint32_t *fence);
 int host1x_client_wait(struct host1x_client *client, uint32_t fence,
 		       uint32_t timeout);
 
-static inline int host1x_pushbuf_push_float(struct host1x_pushbuf *pb, float f)
-{
-	union {
-		uint32_t u;
-		float f;
-	} value;
-	value.f = f;
-	return host1x_pushbuf_push(pb, value.u);
-}
-
 static inline struct host1x_job *host1x_job_create_helper(
+					struct host1x_client *client,
 					uint32_t syncpt, uint32_t increments,
 					const char *file, int line)
 {
-	struct host1x_job *job = host1x_job_create(syncpt, increments);
+	struct host1x_job *job = host1x_job_create(client, syncpt, increments);
 	if (!job)
 		fprintf(stderr,
 			"ERROR: %s:%d: host1x_job_create() failed\n",
@@ -365,7 +495,7 @@ static inline struct host1x_pushbuf *host1x_job_append_helper(
 					unsigned long offset,
 					const char *file, int line)
 {
-	struct host1x_pushbuf *pb = host1x_job_append(job, bo, offset);
+	struct host1x_pushbuf *pb = job->client->job_append(job, bo, offset);
 	if (!pb)
 		fprintf(stderr,
 			"ERROR: %s:%d: host1x_job_append() failed\n",
@@ -373,18 +503,30 @@ static inline struct host1x_pushbuf *host1x_job_append_helper(
 	return pb;
 }
 
-static inline int host1x_pushbuf_relocate_helper(struct host1x_pushbuf *pb,
-						   struct host1x_bo *target,
-						   unsigned long offset,
-						   unsigned long shift,
-						   const char *file, int line)
+static inline void
+host1x_pushbuf_relocate_helper(struct host1x_pushbuf *pb,
+			       struct host1x_bo *target,
+			       unsigned long offset,
+			       unsigned long shift,
+			       const char *file, int line)
 {
-	int err = host1x_pushbuf_relocate(pb, target, offset, shift);
+	int err;
+
+	err = pb->push_reloc(pb, target, offset, shift);
 	if (err)
 		fprintf(stderr,
 			"ERROR: %s:%d: host1x_pushbuf_relocate() failed %d\n",
 			file, line, err);
-	return err;
+}
+
+static inline int host1x_pushbuf_push_float(struct host1x_pushbuf *pb, float f)
+{
+	union {
+		uint32_t u;
+		float f;
+	} value;
+	value.f = f;
+	return host1x_pushbuf_push(pb, value.u);
 }
 
 static inline int host1x_client_submit_helper(struct host1x_client *client,
@@ -423,8 +565,8 @@ static inline int host1x_client_wait_helper(struct host1x_client *client,
 	return err;
 }
 
-#define HOST1X_JOB_CREATE(syncpt, increments) \
-	host1x_job_create_helper(syncpt, increments, __FILE__, __LINE__)
+#define HOST1X_JOB_CREATE(client, syncpt, increments) \
+	host1x_job_create_helper(client, syncpt, increments, __FILE__, __LINE__)
 
 #define HOST1X_JOB_APPEND(job, bo, offset) \
 	host1x_job_append_helper(job, bo, offset, __FILE__, __LINE__)

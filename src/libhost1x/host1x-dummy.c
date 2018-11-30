@@ -23,7 +23,7 @@
 
 #include <string.h>
 
-#include "host1x-private.h"
+#include "host1x.h"
 
 struct dummy_data {
 	void *ptr;
@@ -130,6 +130,7 @@ static int host1x_dummy_wait(struct host1x_client *client, uint32_t fence,
 static struct host1x_syncpt syncpt;
 
 static struct host1x_client dummy_client = {
+	.job_append = host1x_job_append_common,
 	.submit = host1x_dummy_submit,
 	.flush = host1x_dummy_flush,
 	.wait = host1x_dummy_wait,

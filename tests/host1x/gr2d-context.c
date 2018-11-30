@@ -30,7 +30,6 @@
 #include <unistd.h>
 
 #include "host1x.h"
-#include "host1x-private.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -65,7 +64,8 @@ static void prepare_context(struct ctx2d *ctx,
 			    unsigned int width, unsigned int height,
 			    uint32_t color)
 {
-	struct host1x_syncpt *syncpt = &ctx->gr2d->client->syncpts[0];
+	struct host1x_client *client = ctx->gr2d->client;
+	struct host1x_syncpt *syncpt = &client->syncpts[0];
 	struct host1x_pixelbuffer *src;
 	struct host1x_pushbuf *pb;
 	struct host1x_job *job;
@@ -93,7 +93,7 @@ static void prepare_context(struct ctx2d *ctx,
 	if (err < 0)
 		abort();
 
-	job = HOST1X_JOB_CREATE(syncpt->id, 1);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 1);
 	if (!job)
 		abort();
 
@@ -127,11 +127,9 @@ static void prepare_context(struct ctx2d *ctx,
 	host1x_pushbuf_push(pb, 0 << 20 | 0); /* tilemode */
 
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_MASK(0x02b, 0x6149));
-	HOST1X_PUSHBUF_RELOCATE(pb, dst, target->bo->offset, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef); /* dstba */
+	HOST1X_PUSHBUF_RELOCATE(pb, dst, target->bo->offset, 0); /* dstba */
 	host1x_pushbuf_push(pb, target->pitch); /* dstst */
-	HOST1X_PUSHBUF_RELOCATE(pb, src->bo, src->bo->offset, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef); /* srcba */
+	HOST1X_PUSHBUF_RELOCATE(pb, src->bo, src->bo->offset, 0); /* srcba */
 	host1x_pushbuf_push(pb, src->pitch); /* srcst */
 	host1x_pushbuf_push(pb, height << 16 | width); /* dstsize */
 	host1x_pushbuf_push(pb, 0 << 16 | 0); /* srcps */
@@ -152,13 +150,14 @@ static void prepare_context(struct ctx2d *ctx,
 
 static void exec_context(struct ctx2d *ctx, unsigned int dx, unsigned int dy)
 {
-	struct host1x_syncpt *syncpt = &ctx->gr2d->client->syncpts[0];
+	struct host1x_client *client = ctx->gr2d->client;
+	struct host1x_syncpt *syncpt = &client->syncpts[0];
 	struct host1x_pushbuf *pb;
 	struct host1x_job *job;
 	uint32_t fence;
 	int err;
 
-	job = HOST1X_JOB_CREATE(syncpt->id, 1);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 1);
 	if (!job)
 		abort();
 

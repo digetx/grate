@@ -23,7 +23,7 @@
 #ifndef GRATE_HOST1X_X11_DISPLAY_H
 #define GRATE_HOST1X_X11_DISPLAY_H 1
 
-#include "host1x-private.h"
+#include "host1x.h"
 
 int x11_display_create(struct host1x *host1x, struct host1x_display *base);
 

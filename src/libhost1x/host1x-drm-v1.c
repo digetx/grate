@@ -34,7 +34,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-#include "host1x-private.h"
+#include "host1x.h"
 #include "tegra_drm.h"
 #include "x11-display.h"
 
@@ -599,6 +599,9 @@ static void drm_bo_free(struct host1x_bo *bo)
 	if (bo->wrapped)
 		return free(drm_bo);
 
+	if (bo->ptr)
+		munmap(bo->ptr, bo->size);
+
 	memset(&args, 0, sizeof(args));
 	args.handle = bo->handle;
 
@@ -954,6 +957,7 @@ static int drm_channel_init(struct drm *drm, struct drm_channel *channel,
 	channel->client.submit = drm_channel_submit;
 	channel->client.flush = drm_channel_flush;
 	channel->client.wait = drm_channel_wait;
+	channel->client.job_append = host1x_job_append_common;
 
 	return 0;
 }
@@ -1062,20 +1066,24 @@ static void drm_close(struct host1x *host1x)
 	free(drm);
 }
 
-struct host1x *host1x_drm_open(int fd)
+struct host1x *host1x_drm_open_v1(int fd)
 {
 	struct drm *drm;
+	bool close_fd;
 	int err;
 
 	if (fd < 0) {
 		fd = open("/dev/dri/card0", O_RDWR);
 		if (fd < 0)
 			return NULL;
+
+		close_fd = true;
 	}
 
 	drm = calloc(1, sizeof(*drm));
 	if (!drm) {
-		close(fd);
+		if (close_fd)
+			close(fd);
 		return NULL;
 	}
 
@@ -1090,15 +1098,18 @@ struct host1x *host1x_drm_open(int fd)
 	if (err < 0) {
 		host1x_error("drm_gr2d_create() failed: %d\n", err);
 		free(drm);
-		close(fd);
+		if (close_fd)
+			close(fd);
 		return NULL;
 	}
 
 	err = drm_gr3d_create(&drm->gr3d, drm);
 	if (err < 0) {
 		host1x_error("drm_gr3d_create() failed: %d\n", err);
+		drm_gr2d_close(drm->gr2d);
 		free(drm);
-		close(fd);
+		if (close_fd)
+			close(fd);
 		return NULL;
 	}
 
@@ -1108,7 +1119,7 @@ struct host1x *host1x_drm_open(int fd)
 	return &drm->base;
 }
 
-void host1x_drm_display_init(struct host1x *host1x)
+void host1x_drm_display_init_v1(struct host1x *host1x)
 {
 	struct drm *drm = to_drm(host1x);
 	int err;

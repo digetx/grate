@@ -43,13 +43,14 @@
 
 static int host1x_gr3d_test(struct host1x_gr3d *gr3d)
 {
-	struct host1x_syncpt *syncpt = &gr3d->client->syncpts[0];
+	struct host1x_client *client = gr3d->client;
+	struct host1x_syncpt *syncpt = &client->syncpts[0];
 	struct host1x_pushbuf *pb;
 	struct host1x_job *job;
 	uint32_t fence;
 	int err = 0;
 
-	job = HOST1X_JOB_CREATE(syncpt->id, 1);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 1);
 	if (!job)
 		return -ENOMEM;
 
@@ -134,7 +135,8 @@ static void host1x_gr3d_reset_hw(void)
 
 static int host1x_gr3d_reset(struct host1x_gr3d *gr3d)
 {
-	struct host1x_syncpt *syncpt = &gr3d->client->syncpts[0];
+	struct host1x_client *client = gr3d->client;
+	struct host1x_syncpt *syncpt = &client->syncpts[0];
 	struct host1x_pushbuf *pb;
 	struct host1x_job *job;
 	unsigned int i;
@@ -143,13 +145,15 @@ static int host1x_gr3d_reset(struct host1x_gr3d *gr3d)
 
 	host1x_gr3d_reset_hw();
 
-	job = HOST1X_JOB_CREATE(syncpt->id, 1);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 1);
 	if (!job)
 		return -ENOMEM;
 
 	pb = HOST1X_JOB_APPEND(job, gr3d->commands, 0);
 	if (!pb)
 		return -ENOMEM;
+
+	host1x_pushbuf_push(pb, HOST1X_OPCODE_SETCL(0x000, 0x060, 0x00));
 
 	/* Tegra30 specific stuff */
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(0x750, 0x0010));
@@ -395,7 +399,8 @@ void host1x_gr3d_exit(struct host1x_gr3d *gr3d)
 int host1x_gr3d_triangle(struct host1x_gr3d *gr3d,
 			 struct host1x_pixelbuffer *pixbuf)
 {
-	struct host1x_syncpt *syncpt = &gr3d->client->syncpts[0];
+	struct host1x_client *client = gr3d->client;
+	struct host1x_syncpt *syncpt = &client->syncpts[0];
 	float *attr = gr3d->attributes->ptr;
 	struct host1x_pushbuf *pb;
 	unsigned int depth = 32;
@@ -406,7 +411,7 @@ int host1x_gr3d_triangle(struct host1x_gr3d *gr3d,
 	int err, i;
 
 	/* XXX: count syncpoint increments in command stream */
-	job = HOST1X_JOB_CREATE(syncpt->id, 9);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 9);
 	if (!job)
 		return -ENOMEM;
 
@@ -687,21 +692,17 @@ int host1x_gr3d_triangle(struct host1x_gr3d *gr3d,
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(0xe01, 0x01));
 	/* relocate color render target */
 	HOST1X_PUSHBUF_RELOCATE(pb, pixbuf->bo, 0, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 	/* vertex position attribute */
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(0x100, 0x02));
 	HOST1X_PUSHBUF_RELOCATE(pb, gr3d->attributes, 0x30, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 	host1x_pushbuf_push(pb, 0x0000104d);
 	/* vertex color attribute */
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(0x102, 0x02));
 	HOST1X_PUSHBUF_RELOCATE(pb, gr3d->attributes, 0, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 	host1x_pushbuf_push(pb, 0x0000104d);
 	/* primitive indices */
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_INCR(0x121, 0x03));
 	HOST1X_PUSHBUF_RELOCATE(pb, gr3d->attributes, 0x60, 0);
-	host1x_pushbuf_push(pb, 0xdeadbeef);
 	host1x_pushbuf_push(pb, 0xec000000);
 	host1x_pushbuf_push(pb, 0x00200000);
 	host1x_pushbuf_push(pb, HOST1X_OPCODE_IMM(0xe27, 0x02));

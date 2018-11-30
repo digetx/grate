@@ -49,7 +49,6 @@
 #include <libdrm/drm_fourcc.h>
 
 #include "grate.h"
-#include "host1x-private.h"
 #include "list.h"
 #include "record_replay.h"
 #include "tegra_drm.h"
@@ -488,7 +487,7 @@ static int submit_job(unsigned int ctx_id,
 		printf("    gr3d\n");
 	}
 
-	job = HOST1X_JOB_CREATE(syncpt->id, 1);
+	job = HOST1X_JOB_CREATE(client, syncpt->id, 1);
 	if (!job)
 		abort();
 
@@ -552,9 +551,8 @@ static int submit_job(unsigned int ctx_id,
 
 			pb->ptr = pb->bo->ptr + relocs[k].patch_offset;
 
-			ret = HOST1X_PUSHBUF_RELOCATE(pb, rbo->bo,
-						      relocs[k].offset, 0);
-			assert(ret == 0);
+			HOST1X_PUSHBUF_RELOCATE(pb, rbo->bo,
+						relocs[k].offset, 0);
 
 			handled_relocs[k] = true;
 		}

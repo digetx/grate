@@ -26,7 +26,7 @@
 #define PIXBUF_GUARD_PATTERN	0xF5132803
 
 #include <string.h>
-#include "host1x-private.h"
+#include "host1x.h"
 
 #define ALIGN(x,a)		__ALIGN_MASK(x,(typeof(x))(a)-1)
 #define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))

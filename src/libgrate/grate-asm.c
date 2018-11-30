@@ -72,6 +72,27 @@ cleanup:
 	return data;
 }
 
+static void grate_shader_add_gather(struct grate_shader *shader,
+				    unsigned reg_init_offset,
+				    unsigned reg_init_val,
+				    unsigned data_offset,
+				    unsigned reg_offset,
+				    unsigned count,
+				    bool incr)
+{
+	struct grate_gather gather;
+
+	gather.reg_init_offset = reg_init_offset;
+	gather.reg_init_val = reg_init_val;
+
+	gather.data_offset = data_offset;
+	gather.reg_offset = reg_offset;
+	gather.count = count;
+	gather.incr = incr;
+
+	shader->gathers[shader->num_gathers++] = gather;
+}
+
 struct grate_shader *grate_shader_parse_vertex_asm_from_file(const char *path)
 {
 	char *asm_txt = read_file(path);
@@ -149,6 +170,10 @@ struct grate_shader *grate_shader_parse_vertex_asm(const char *asm_txt)
 
 	shader->words[words++] =
 		HOST1X_OPCODE_NONINCR(0x206, asm_vs_instructions_nb * 4);
+
+	grate_shader_add_gather(shader, 0x205, 0x00, words, 0x206,
+				asm_vs_instructions_nb * 4, false);
+
 	for (i = 0; i < asm_vs_instructions_nb; i++) {
 		shader->words[words++] = asm_vs_instructions[i].part3;
 		shader->words[words++] = asm_vs_instructions[i].part2;
@@ -376,6 +401,10 @@ struct grate_shader *grate_shader_parse_fragment_asm(const char *asm_txt)
 	/* PSEQ */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x541, asm_fs_instructions_nb);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x541,
+				asm_fs_instructions_nb, false);
+
 	for (i = 0; i < asm_fs_instructions_nb; i++)
 		shader->words[words++] = asm_pseq_instructions[i].data;
 
@@ -384,12 +413,20 @@ struct grate_shader *grate_shader_parse_fragment_asm(const char *asm_txt)
 	/* MFU SCHED */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x601, asm_fs_instructions_nb);
+
+	grate_shader_add_gather(shader, 0x500, 0x00, words, 0x601,
+				asm_fs_instructions_nb, false);
+
 	for (i = 0; i < asm_fs_instructions_nb; i++)
 		shader->words[words++] = asm_mfu_sched[i].data;
 
 	/* MFU */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x604, asm_mfu_instructions_nb * 2);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x604,
+				asm_mfu_instructions_nb * 2, false);
+
 	for (i = 0; i < asm_mfu_instructions_nb; i++) {
 		shader->words[words++] = asm_mfu_instructions[i].part1;
 		shader->words[words++] = asm_mfu_instructions[i].part0;
@@ -398,18 +435,30 @@ struct grate_shader *grate_shader_parse_fragment_asm(const char *asm_txt)
 	/* TEX */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x701, asm_fs_instructions_nb);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x701,
+				asm_fs_instructions_nb, false);
+
 	for (i = 0; i < asm_fs_instructions_nb; i++)
 		shader->words[words++] = asm_tex_instructions[i].data;
 
 	/* ALU SCHED */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x801, asm_fs_instructions_nb);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x801,
+				asm_fs_instructions_nb, false);
+
 	for (i = 0; i < asm_fs_instructions_nb; i++)
 		shader->words[words++] = asm_alu_sched[i].data;
 
 	/* ALU */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x804, asm_alu_instructions_nb * 8);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x804,
+				asm_alu_instructions_nb * 8, false);
+
 	for (i = 0; i < asm_alu_instructions_nb; i++) {
 		shader->words[words++] = asm_alu_instructions[i].part1;
 		shader->words[words++] = asm_alu_instructions[i].part0;
@@ -424,12 +473,20 @@ struct grate_shader *grate_shader_parse_fragment_asm(const char *asm_txt)
 	/* ALU COMPLEMENT */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x806, asm_fs_instructions_nb);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x806,
+				asm_fs_instructions_nb, false);
+
 	for (i = 0; i < asm_fs_instructions_nb; i++)
 		shader->words[words++] = asm_alu_instructions[i].complement;
 
 	/* DW */
 	shader->words[words++] =
 			HOST1X_OPCODE_NONINCR(0x901, asm_fs_instructions_nb);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x901,
+				asm_fs_instructions_nb, false);
+
 	for (i = 0; i < asm_fs_instructions_nb; i++)
 		shader->words[words++] = asm_dw_instructions[i].data;
 
@@ -813,6 +870,10 @@ struct grate_shader *grate_shader_parse_linker_asm(const char *asm_txt)
 
 	shader->words[words++] =
 		HOST1X_OPCODE_INCR(0x300, asm_linker_instructions_nb * 2);
+
+	grate_shader_add_gather(shader, 0x00, 0x00, words, 0x300,
+				asm_linker_instructions_nb * 2, true);
+
 	for (i = 0; i < asm_linker_instructions_nb; i++) {
 		shader->words[words++] = asm_linker_instructions[i].first;
 		shader->words[words++] = asm_linker_instructions[i].latter;
